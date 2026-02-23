@@ -51,10 +51,12 @@ else
 fi
 
 for db in "${DBS[@]}"; do
-  # Trim whitespace
-  db=$(echo "$db" | xargs)
+  # Trim whitespace (use sed to avoid xargs parsing issues with quotes)
+  db=$(echo "$db" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
   if [ -n "$db" ]; then
-      FILE_NAME="${db}_${DATE}.sql.gz"
+      # Sanitize DB name for filename to prevent directory traversal or weird S3 keys
+      SAFE_DB_NAME=$(echo "$db" | sed 's/[^a-zA-Z0-9._-]/_/g')
+      FILE_NAME="${SAFE_DB_NAME}_${DATE}.sql.gz"
       S3_DEST="s3://${S3_BUCKET}"
       if [ -n "$S3_PREFIX" ]; then
          S3_DEST="${S3_DEST}/${S3_PREFIX}"
