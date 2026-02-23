@@ -1,4 +1,4 @@
-FROM postgres:17-alpine
+FROM postgres:18-alpine
 
 # Install AWS CLI and bash
 RUN apk add --no-cache \
