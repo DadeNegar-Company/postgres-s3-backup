@@ -33,14 +33,23 @@ export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
 export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 
-# If POSTGRES_DB is provided, backup specific comma-separated databases.
-# Otherwise, skip or maybe define another behavior.
-if [ -n "$POSTGRES_DB" ]; then
+# If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
+if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
+  echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
+  DBS_LIST=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate = false;")
+  # Convert the newline separated list into an array
+  mapfile -t DBS <<< "$DBS_LIST"
+elif [ -n "$POSTGRES_DB" ]; then
   IFS=',' read -ra DBS <<< "$POSTGRES_DB"
-  for db in "${DBS[@]}"; do
-    # Trim whitespace
-    db=$(echo "$db" | xargs)
-    if [ -n "$db" ]; then
+else
+  echo "Neither POSTGRES_DB nor BACKUP_ALL_DATABASES is provided. Nothing to backup."
+  exit 0
+fi
+
+for db in "${DBS[@]}"; do
+  # Trim whitespace
+  db=$(echo "$db" | xargs)
+  if [ -n "$db" ]; then
       FILE_NAME="${db}_${DATE}.sql.gz"
       echo "Backing up database: $db to $FILE_NAME..."
       
@@ -67,8 +76,5 @@ if [ -n "$POSTGRES_DB" ]; then
       echo "Finished backing up $db."
     fi
   done
-else
-  echo "POSTGRES_DB is not provided. Nothing to backup."
-fi
 
 echo "Backup process completed successfully."

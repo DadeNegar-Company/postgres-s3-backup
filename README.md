@@ -3,7 +3,8 @@
 A custom Docker image to back up one or more PostgreSQL databases to an S3-compatible storage service. It uses `pg_dump` from official PostgreSQL Alpine images and uploads the compressed archives (`.sql.gz`) via the AWS CLI.
 
 ## Features
-- Backs up *multiple* databases if provided as a comma-separated list.
+- Automatically backs up **all** databases if `BACKUP_ALL_DATABASES=true` is set.
+- Backs up *multiple* databases if provided as a comma-separated list in `POSTGRES_DB`.
 - Supports any S3-compatible service (AWS S3, MinIO, Cloudflare R2, ArvanCloud, etc.)
 - Uses the native `postgres:18-alpine` client.
 
@@ -11,6 +12,7 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
+| `BACKUP_ALL_DATABASES` | If `true` or `1`, dynamically fetches all available DBs and backs them up. | `false` | No |
 | `POSTGRES_HOST` | Hostname of the database server | `localhost` | No |
 | `POSTGRES_PORT` | Port of the database server | `5432` | No |
 | `POSTGRES_USER` | Username to connect with | | **Yes** |
