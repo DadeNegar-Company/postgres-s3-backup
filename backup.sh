@@ -2,6 +2,7 @@
 
 # Exit on explicitly thrown errors
 set -e
+set -o pipefail
 
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
@@ -54,29 +55,21 @@ for db in "${DBS[@]}"; do
   db=$(echo "$db" | xargs)
   if [ -n "$db" ]; then
       FILE_NAME="${db}_${DATE}.sql.gz"
-      echo "Backing up database: $db to $FILE_NAME..."
-      
-      # Perform the dump and compress
-      echo "Dumping..."
-      # Use -- to prevent flag injection from $db variable
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip > "/tmp/$FILE_NAME"
-      
-      echo "Uploading /tmp/$FILE_NAME to S3 bucket $S3_BUCKET under prefix $S3_PREFIX"
       S3_DEST="s3://${S3_BUCKET}"
       if [ -n "$S3_PREFIX" ]; then
          S3_DEST="${S3_DEST}/${S3_PREFIX}"
       fi
-      
+
       AWS_ARGS=()
       if [ -n "$S3_ENDPOINT" ]; then
          AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
       fi
-      
-      # Avoid eval and use proper quoting to prevent command injection
-      aws s3 cp "/tmp/$FILE_NAME" "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
-      
-      # Clean up local file
-      rm -- "/tmp/$FILE_NAME"
+
+      echo "Streaming backup of database: $db to ${S3_DEST}/$FILE_NAME..."
+
+      # Stream backup directly to S3 without local buffering
+      # set -o pipefail ensures we catch pg_dump errors
+      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
