@@ -3,6 +3,9 @@
 # Exit on explicitly thrown errors
 set -e
 
+# Secure default umask to ensure created files are only readable by the owner
+umask 0077
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
@@ -55,7 +58,8 @@ for db in "${DBS[@]}"; do
       
       # Perform the dump and compress
       echo "Dumping..."
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" "$db" | gzip > "/tmp/$FILE_NAME"
+      # Use -- to prevent flag injection from $db variable
+      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip > "/tmp/$FILE_NAME"
       
       echo "Uploading /tmp/$FILE_NAME to S3 bucket $S3_BUCKET under prefix $S3_PREFIX"
       S3_DEST="s3://${S3_BUCKET}"
@@ -63,16 +67,16 @@ for db in "${DBS[@]}"; do
          S3_DEST="${S3_DEST}/${S3_PREFIX}"
       fi
       
-      AWS_ARGS=""
+      AWS_ARGS=()
       if [ -n "$S3_ENDPOINT" ]; then
-         AWS_ARGS="--endpoint-url $S3_ENDPOINT"
+         AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
       fi
       
-      # Use eval to handle the variable expansion properly
-      eval "aws s3 cp /tmp/$FILE_NAME ${S3_DEST}/$FILE_NAME $AWS_ARGS"
+      # Avoid eval and use proper quoting to prevent command injection
+      aws s3 cp "/tmp/$FILE_NAME" "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       
       # Clean up local file
-      rm "/tmp/$FILE_NAME"
+      rm -- "/tmp/$FILE_NAME"
       echo "Finished backing up $db."
     fi
   done
