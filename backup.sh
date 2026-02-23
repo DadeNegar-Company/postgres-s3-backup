@@ -3,6 +3,9 @@
 # Exit on explicitly thrown errors
 set -e
 
+# Fail if any command in a pipe fails
+set -o pipefail
+
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
@@ -53,7 +56,9 @@ for db in "${DBS[@]}"; do
   # Trim whitespace
   db=$(echo "$db" | xargs)
   if [ -n "$db" ]; then
-      FILE_NAME="${db}_${DATE}.sql.gz"
+      # Sanitize db name for filename to prevent path traversal
+      SAFE_DB_NAME=${db//\//_}
+      FILE_NAME="${SAFE_DB_NAME}_${DATE}.sql.gz"
       echo "Backing up database: $db to $FILE_NAME..."
       
       # Perform the dump and compress
