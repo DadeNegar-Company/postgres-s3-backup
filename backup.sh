@@ -30,7 +30,21 @@ fi
 
 echo "Starting backup process at $DATE"
 
-export PGPASSWORD=$POSTGRES_PASSWORD
+# Create a temporary .pgpass file to avoid exposing password in environment variables
+export PGPASSFILE=$(mktemp)
+chmod 600 "$PGPASSFILE"
+
+# Ensure the file is deleted on exit
+trap 'rm -f "$PGPASSFILE"' EXIT
+
+# Escape colon and backslash in password as per .pgpass format
+ESCAPED_PASSWORD=$(echo "$POSTGRES_PASSWORD" | sed 's/\\/\\\\/g; s/:/\\:/g')
+# Use wildcards to match any host/port/db/user (since this container is single-purpose)
+echo "*:*:*:*:${ESCAPED_PASSWORD}" > "$PGPASSFILE"
+
+unset PGPASSWORD
+unset POSTGRES_PASSWORD
+unset ESCAPED_PASSWORD
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
 export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}

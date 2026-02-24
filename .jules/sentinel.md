@@ -7,3 +7,8 @@
 **Vulnerability:** `xargs` was used to trim whitespace from database names, but it also strips quotes (e.g., `db'name` -> `dbname`), leading to backup failures. Additionally, unsanitized database names (e.g., `db/name`) could alter S3 key structures.
 **Learning:** `xargs` parses quotes and backslashes by default, making it unsuitable for processing raw strings. Unsanitized inputs used in filenames can lead to path traversal or unexpected file locations.
 **Prevention:** Avoid `xargs` for string manipulation; use `sed` or bash parameter expansion. Always sanitize user-influenced inputs before using them in file paths or object keys.
+
+## 2026-02-24 - Secret Exposure via Environment Variables
+**Vulnerability:** The script exported `PGPASSWORD` as an environment variable. Environment variables of a process are often visible to other users on the system (e.g., via `/proc/<pid>/environ`), leaking sensitive credentials.
+**Learning:** Avoid passing secrets via environment variables to long-running or child processes if file-based alternatives exist.
+**Prevention:** Use `PGPASSFILE` pointing to a temporary file (with `0600` permissions) containing the credentials. Ensure the file is deleted upon script exit using `trap`. Unset sensitive variables from the shell environment immediately after use.
