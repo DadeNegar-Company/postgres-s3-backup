@@ -71,7 +71,12 @@ for db in "${DBS[@]}"; do
 
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      # Use pigz for parallel compression if available, otherwise fallback to gzip
+      if command -v pigz >/dev/null 2>&1; then
+          pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | pigz | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      else
+          pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      fi
       echo "Finished backing up $db."
     fi
   done
