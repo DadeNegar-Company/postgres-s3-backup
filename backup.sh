@@ -30,7 +30,17 @@ fi
 
 echo "Starting backup process at $DATE"
 
-export PGPASSWORD=$POSTGRES_PASSWORD
+# Setup PGPASSFILE to avoid using PGPASSWORD environment variable (which is insecure)
+PGPASS_TMP=$(mktemp)
+chmod 0600 "$PGPASS_TMP"
+trap 'rm -f "$PGPASS_TMP"' EXIT
+
+# Escape backslashes and colons in the password for the pgpass file
+ESCAPED_PASSWORD=$(printf "%s" "$POSTGRES_PASSWORD" | sed 's/\\/\\\\/g; s/:/\\:/g')
+
+# Write to PGPASSFILE: hostname:port:database:username:password
+echo "$POSTGRES_HOST:$POSTGRES_PORT:*:$POSTGRES_USER:$ESCAPED_PASSWORD" > "$PGPASS_TMP"
+export PGPASSFILE="$PGPASS_TMP"
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
 export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}

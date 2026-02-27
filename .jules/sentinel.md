@@ -7,3 +7,8 @@
 **Vulnerability:** `xargs` was used to trim whitespace from database names, but it also strips quotes (e.g., `db'name` -> `dbname`), leading to backup failures. Additionally, unsanitized database names (e.g., `db/name`) could alter S3 key structures.
 **Learning:** `xargs` parses quotes and backslashes by default, making it unsuitable for processing raw strings. Unsanitized inputs used in filenames can lead to path traversal or unexpected file locations.
 **Prevention:** Avoid `xargs` for string manipulation; use `sed` or bash parameter expansion. Always sanitize user-influenced inputs before using them in file paths or object keys.
+
+## 2026-02-27 - Credential Leakage via Process Environment
+**Vulnerability:** Using `export PGPASSWORD` makes the database password visible to other users on the system via `ps` or `/proc` inspection.
+**Learning:** Environment variables are often considered private, but on shared systems or containers without strict isolation, they can be inspected by other processes. PostgreSQL supports file-based authentication (`.pgpass`) which avoids this exposure.
+**Prevention:** Use `PGPASSFILE` pointing to a temporary file with restrictive permissions (`0600`) instead of `PGPASSWORD`. Ensure the temporary file is cleaned up securely (e.g., via `trap`).
