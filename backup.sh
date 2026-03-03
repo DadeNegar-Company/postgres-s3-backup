@@ -30,7 +30,18 @@ fi
 
 echo "Starting backup process at $DATE"
 
-export PGPASSWORD=$POSTGRES_PASSWORD
+# Securely handle PostgreSQL password using a temporary PGPASSFILE
+export PGPASSFILE=$(mktemp)
+chmod 0600 "$PGPASSFILE"
+# Safely append to any existing EXIT trap
+trap 'rm -f "$PGPASSFILE"; '"$(trap -p EXIT | sed -n "s/^trap -- '\(.*\)' EXIT$/\1/p")" EXIT
+
+# Format: hostname:port:database:username:password
+# We use wildcards for host, port, and database to match PGPASSWORD behavior
+printf "*:*:*:%s:" "$POSTGRES_USER" > "$PGPASSFILE"
+# Escape backslashes and colons in the password as required by pgpass format
+printf "%s" "$POSTGRES_PASSWORD" | sed -e 's/\\/\\\\/g' -e 's/:/\\:/g' >> "$PGPASSFILE"
+printf "\n" >> "$PGPASSFILE"
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
 export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
