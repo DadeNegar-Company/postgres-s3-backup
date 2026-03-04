@@ -7,3 +7,8 @@
 **Vulnerability:** `xargs` was used to trim whitespace from database names, but it also strips quotes (e.g., `db'name` -> `dbname`), leading to backup failures. Additionally, unsanitized database names (e.g., `db/name`) could alter S3 key structures.
 **Learning:** `xargs` parses quotes and backslashes by default, making it unsuitable for processing raw strings. Unsanitized inputs used in filenames can lead to path traversal or unexpected file locations.
 **Prevention:** Avoid `xargs` for string manipulation; use `sed` or bash parameter expansion. Always sanitize user-influenced inputs before using them in file paths or object keys.
+
+## 2026-03-04 - Environment Variable Exposure via PGPASSWORD
+**Vulnerability:** The database password was explicitly set in the `PGPASSWORD` environment variable (`export PGPASSWORD=$POSTGRES_PASSWORD`), which exposes it to all child processes and makes it visible via system monitoring tools like `ps`.
+**Learning:** Hardcoded credentials or secrets should never be exported as environment variables unless explicitly required and carefully managed. The PostgreSQL client natively supports a much safer mechanism via `PGPASSFILE`, which reads credentials from a local file with strict permissions (0600).
+**Prevention:** Always use `PGPASSFILE` instead of `PGPASSWORD`. The `PGPASSFILE` should be created dynamically (e.g., using `mktemp`), given `0600` permissions, populated securely (e.g., escaping colons and backslashes without capturing `$()`), and properly cleaned up using an `EXIT` trap (while preserving any existing traps).
