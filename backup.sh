@@ -30,7 +30,22 @@ fi
 
 echo "Starting backup process at $DATE"
 
-export PGPASSWORD=$POSTGRES_PASSWORD
+# Securely store Postgres password using PGPASSFILE instead of exporting PGPASSWORD
+export PGPASSFILE=$(mktemp)
+chmod 0600 "$PGPASSFILE"
+
+# Append cleanup trap safely
+trap 'rm -f "$PGPASSFILE"; '"$(trap -p EXIT | sed -n "s/^trap -- '\(.*\)' EXIT$/\1/p")" EXIT
+
+# Format: hostname:port:database:username:password
+# Escape backslashes and colons in the password
+printf "*:*:*:*:" > "$PGPASSFILE"
+printf "%s" "$POSTGRES_PASSWORD" | sed 's/\\/\\\\/g; s/:/\\:/g' >> "$PGPASSFILE"
+printf "\n" >> "$PGPASSFILE"
+
+# Unset the sensitive environment variables to prevent leakage to child processes
+unset POSTGRES_PASSWORD
+unset PGPASSWORD
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
 export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
