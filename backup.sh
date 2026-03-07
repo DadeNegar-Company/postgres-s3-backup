@@ -13,6 +13,17 @@ S3_PREFIX=${S3_PREFIX:-""}
 POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
 
+# Support for Docker Secrets (_FILE environment variables)
+if [ -n "$POSTGRES_PASSWORD_FILE" ] && [ -f "$POSTGRES_PASSWORD_FILE" ]; then
+  POSTGRES_PASSWORD=$(cat "$POSTGRES_PASSWORD_FILE")
+fi
+
+if [ -n "$S3_SECRET_ACCESS_KEY_FILE" ] && [ -f "$S3_SECRET_ACCESS_KEY_FILE" ]; then
+  S3_SECRET_ACCESS_KEY=$(cat "$S3_SECRET_ACCESS_KEY_FILE")
+elif [ -n "$AWS_SECRET_ACCESS_KEY_FILE" ] && [ -f "$AWS_SECRET_ACCESS_KEY_FILE" ]; then
+  AWS_SECRET_ACCESS_KEY=$(cat "$AWS_SECRET_ACCESS_KEY_FILE")
+fi
+
 if [ -z "$POSTGRES_USER" ]; then
   echo "Error: POSTGRES_USER must be provided."
   exit 1
@@ -52,10 +63,10 @@ fi
 
 for db in "${DBS[@]}"; do
   # Trim whitespace (use sed to avoid xargs parsing issues with quotes)
-  db=$(echo "$db" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+  db=$(printf "%s\n" "$db" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
   if [ -n "$db" ]; then
       # Sanitize DB name for filename to prevent directory traversal or weird S3 keys
-      SAFE_DB_NAME=$(echo "$db" | sed 's/[^a-zA-Z0-9._-]/_/g')
+      SAFE_DB_NAME=$(printf "%s\n" "$db" | sed 's/[^a-zA-Z0-9._-]/_/g')
       FILE_NAME="${SAFE_DB_NAME}_${DATE}.sql.gz"
       S3_DEST="s3://${S3_BUCKET}"
       if [ -n "$S3_PREFIX" ]; then
