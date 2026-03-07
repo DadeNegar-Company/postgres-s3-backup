@@ -30,6 +30,15 @@ fi
 
 echo "Starting backup process at $DATE"
 
+# Use pigz for parallel compression if available, otherwise fallback to gzip
+if command -v pigz > /dev/null 2>&1; then
+  COMPRESSION_CMD="pigz"
+  echo "Using pigz for parallel compression"
+else
+  COMPRESSION_CMD="gzip"
+  echo "pigz not found, falling back to gzip"
+fi
+
 export PGPASSWORD=$POSTGRES_PASSWORD
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
@@ -71,7 +80,7 @@ for db in "${DBS[@]}"; do
 
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | $COMPRESSION_CMD | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
