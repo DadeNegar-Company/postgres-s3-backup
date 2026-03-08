@@ -7,6 +7,42 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Load secret from file
+load_secret() {
+  local var="$1"
+  local fileVar="${var}_FILE"
+  local var_val="${!var}"
+  local fileVar_val="${!fileVar}"
+
+  if [ -n "$var_val" ] && [ -n "$fileVar_val" ]; then
+    echo "Error: Both $var and $fileVar are set (but are exclusive)" >&2
+    exit 1
+  fi
+  if [ -n "$fileVar_val" ]; then
+    if [ -f "$fileVar_val" ]; then
+      export "$var"="$(cat "$fileVar_val")"
+    else
+      echo "Error: Secret file $fileVar_val does not exist" >&2
+      exit 1
+    fi
+  fi
+}
+
+load_secret POSTGRES_USER
+load_secret POSTGRES_PASSWORD
+load_secret S3_ACCESS_KEY_ID
+load_secret S3_SECRET_ACCESS_KEY
+load_secret AWS_ACCESS_KEY_ID
+load_secret AWS_SECRET_ACCESS_KEY
+load_secret S3_BUCKET
+load_secret S3_ENDPOINT
+load_secret S3_REGION
+load_secret S3_PREFIX
+load_secret POSTGRES_DB
+load_secret BACKUP_ALL_DATABASES
+load_secret POSTGRES_HOST
+load_secret POSTGRES_PORT
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
@@ -14,17 +50,17 @@ POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
 
 if [ -z "$POSTGRES_USER" ]; then
-  echo "Error: POSTGRES_USER must be provided."
+  echo "Error: POSTGRES_USER or POSTGRES_USER_FILE must be provided."
   exit 1
 fi
 
 if [ -z "$POSTGRES_PASSWORD" ]; then
-  echo "Error: POSTGRES_PASSWORD must be provided."
+  echo "Error: POSTGRES_PASSWORD or POSTGRES_PASSWORD_FILE must be provided."
   exit 1
 fi
 
 if [ -z "$S3_BUCKET" ]; then
-  echo "Error: S3_BUCKET must be provided."
+  echo "Error: S3_BUCKET or S3_BUCKET_FILE must be provided."
   exit 1
 fi
 
