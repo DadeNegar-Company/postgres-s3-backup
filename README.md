@@ -16,13 +16,17 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 | `POSTGRES_HOST` | Hostname of the database server | `localhost` | No |
 | `POSTGRES_PORT` | Port of the database server | `5432` | No |
 | `POSTGRES_USER` | Username to connect with | | **Yes** |
+| `POSTGRES_USER_FILE` | File containing username to connect with (Docker Secrets) | | No |
 | `POSTGRES_PASSWORD` | Password for the database user | | **Yes** |
+| `POSTGRES_PASSWORD_FILE`| File containing password for the database user (Docker Secrets)| | No |
 | `POSTGRES_DB` | Comma-separated list of databases to dump | | No |
 | `S3_BUCKET` | S3 bucket name | | **Yes** |
 | `S3_PREFIX` | S3 bucket path (folder) | `""` | No |
 | `S3_ENDPOINT`| Custom S3 endpoint URL | `""` | No |
 | `S3_ACCESS_KEY_ID` | AWS/S3 access key | | **Yes** |
+| `S3_ACCESS_KEY_ID_FILE` | File containing AWS/S3 access key (Docker Secrets) | | No |
 | `S3_SECRET_ACCESS_KEY` | AWS/S3 secret key | | **Yes** |
+| `S3_SECRET_ACCESS_KEY_FILE`| File containing AWS/S3 secret key (Docker Secrets) | | No |
 | `S3_REGION` | AWS/S3 region | `us-east-1` | No |
 
 ## Usage

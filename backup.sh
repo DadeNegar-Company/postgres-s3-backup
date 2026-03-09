@@ -7,6 +7,33 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Function to safely load secrets from files (Docker Secrets pattern)
+load_secret() {
+  local var_name="$1"
+  local file_var_name="${var_name}_FILE"
+  # We use local val="${!var}" pattern to avoid bad substitution errors
+  local file_path="${!file_var_name}"
+  local current_val="${!var_name}"
+
+  if [ -n "$file_path" ]; then
+    if [ -n "$current_val" ]; then
+      echo "Error: Both $var_name and $file_var_name are set. They are mutually exclusive." >&2
+      exit 1
+    fi
+    if [ -f "$file_path" ]; then
+      export "$var_name"="$(cat "$file_path")"
+    else
+      echo "Error: $file_var_name is set but file does not exist: $file_path" >&2
+      exit 1
+    fi
+  fi
+}
+
+load_secret "POSTGRES_USER"
+load_secret "POSTGRES_PASSWORD"
+load_secret "S3_ACCESS_KEY_ID"
+load_secret "S3_SECRET_ACCESS_KEY"
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
