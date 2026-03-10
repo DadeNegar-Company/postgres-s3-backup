@@ -13,6 +13,20 @@ S3_PREFIX=${S3_PREFIX:-""}
 POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
 
+# Load secrets from Docker Secrets (_FILE variables) into memory to avoid cleartext environment variables
+for secret_var in POSTGRES_USER POSTGRES_PASSWORD S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+  file_var="${secret_var}_FILE"
+  file_path="${!file_var}"
+  if [ -n "$file_path" ]; then
+    if [ -f "$file_path" ]; then
+      export "$secret_var"="$(cat "$file_path")"
+    else
+      echo "Error: Secret file $file_path defined in $file_var does not exist."
+      exit 1
+    fi
+  fi
+done
+
 if [ -z "$POSTGRES_USER" ]; then
   echo "Error: POSTGRES_USER must be provided."
   exit 1
