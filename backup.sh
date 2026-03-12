@@ -7,6 +7,28 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Load secrets from Docker secrets (_FILE variables) directly into memory
+load_secret() {
+  local var_name="$1"
+  local file_var_name="${var_name}_FILE"
+  # Assign indirect expansion to local variable first to avoid bad substitution errors
+  local file_var_val="${!file_var_name}"
+
+  if [ -n "$file_var_val" ] && [ -f "$file_var_val" ]; then
+    export "$var_name"="$(head -n 1 "$file_var_val" | tr -d '\r')"
+  fi
+}
+
+# Support loading credentials from files
+load_secret POSTGRES_USER
+load_secret POSTGRES_PASSWORD
+load_secret S3_BUCKET
+load_secret S3_ACCESS_KEY_ID
+load_secret S3_SECRET_ACCESS_KEY
+load_secret S3_ENDPOINT
+load_secret S3_REGION
+load_secret POSTGRES_DB
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
