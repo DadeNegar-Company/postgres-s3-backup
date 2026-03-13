@@ -25,6 +25,9 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 | `S3_SECRET_ACCESS_KEY` | AWS/S3 secret key | | **Yes** |
 | `S3_REGION` | AWS/S3 region | `us-east-1` | No |
 
+**Note on Docker Secrets:**
+To avoid passing sensitive information in plain text environment variables, you can append `_FILE` to `POSTGRES_USER`, `POSTGRES_PASSWORD`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. The script will dynamically read the contents of the specified files into the respective variables. (e.g. `POSTGRES_PASSWORD_FILE=/run/secrets/db_password`)
+
 ## Usage
 
 You can run this container standalone or via a Kubernetes `CronJob`. To deploy it, simply pass the required environments:
