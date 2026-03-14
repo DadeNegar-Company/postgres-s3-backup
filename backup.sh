@@ -13,6 +13,26 @@ S3_PREFIX=${S3_PREFIX:-""}
 POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
 
+# Load Docker Secrets if specified
+if [ -n "$POSTGRES_USER_FILE" ] && [ -f "$POSTGRES_USER_FILE" ]; then
+  POSTGRES_USER=$(cat "$POSTGRES_USER_FILE")
+fi
+if [ -n "$POSTGRES_PASSWORD_FILE" ] && [ -f "$POSTGRES_PASSWORD_FILE" ]; then
+  POSTGRES_PASSWORD=$(cat "$POSTGRES_PASSWORD_FILE")
+fi
+if [ -n "$S3_ACCESS_KEY_ID_FILE" ] && [ -f "$S3_ACCESS_KEY_ID_FILE" ]; then
+  S3_ACCESS_KEY_ID=$(cat "$S3_ACCESS_KEY_ID_FILE")
+fi
+if [ -n "$S3_SECRET_ACCESS_KEY_FILE" ] && [ -f "$S3_SECRET_ACCESS_KEY_FILE" ]; then
+  S3_SECRET_ACCESS_KEY=$(cat "$S3_SECRET_ACCESS_KEY_FILE")
+fi
+if [ -n "$AWS_ACCESS_KEY_ID_FILE" ] && [ -f "$AWS_ACCESS_KEY_ID_FILE" ]; then
+  AWS_ACCESS_KEY_ID=$(cat "$AWS_ACCESS_KEY_ID_FILE")
+fi
+if [ -n "$AWS_SECRET_ACCESS_KEY_FILE" ] && [ -f "$AWS_SECRET_ACCESS_KEY_FILE" ]; then
+  AWS_SECRET_ACCESS_KEY=$(cat "$AWS_SECRET_ACCESS_KEY_FILE")
+fi
+
 if [ -z "$POSTGRES_USER" ]; then
   echo "Error: POSTGRES_USER must be provided."
   exit 1
