@@ -13,6 +13,30 @@ S3_PREFIX=${S3_PREFIX:-""}
 POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
 
+# Function to load secrets from Docker secret files
+load_secret() {
+  local var="$1"
+  local file_var="${var}_FILE"
+  if [[ -v "$file_var" ]]; then
+    local file_path="${!file_var}"
+    if [[ -n "$file_path" ]]; then
+      if [[ -f "$file_path" && -r "$file_path" ]]; then
+        export "$var"="$(cat "$file_path")"
+      else
+        echo "Error: $file_var file not found or not readable: $file_path" >&2
+        return 1
+      fi
+    fi
+  fi
+}
+
+# Load credentials from files if provided
+load_secret POSTGRES_USER
+load_secret POSTGRES_PASSWORD
+load_secret S3_BUCKET
+load_secret S3_ACCESS_KEY_ID
+load_secret S3_SECRET_ACCESS_KEY
+
 if [ -z "$POSTGRES_USER" ]; then
   echo "Error: POSTGRES_USER must be provided."
   exit 1
