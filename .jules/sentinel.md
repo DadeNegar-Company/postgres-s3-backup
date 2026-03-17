@@ -7,3 +7,7 @@
 **Vulnerability:** `xargs` was used to trim whitespace from database names, but it also strips quotes (e.g., `db'name` -> `dbname`), leading to backup failures. Additionally, unsanitized database names (e.g., `db/name`) could alter S3 key structures.
 **Learning:** `xargs` parses quotes and backslashes by default, making it unsuitable for processing raw strings. Unsanitized inputs used in filenames can lead to path traversal or unexpected file locations.
 **Prevention:** Avoid `xargs` for string manipulation; use `sed` or bash parameter expansion. Always sanitize user-influenced inputs before using them in file paths or object keys.
+## 2024-05-02 - [Docker Secrets Support]
+**Vulnerability:** The application originally required sensitive credentials (e.g., POSTGRES_PASSWORD, S3_SECRET_ACCESS_KEY) to be passed via standard environment variables. These standard variables are visible in container inspection, risking exposure.
+**Learning:** Loading environment variables from Docker Secrets avoids storing plain-text secrets in the container's environment space.
+**Prevention:** Support dynamic secret resolution via `_FILE` environment variables. Do not use standard plain-text variables for credentials whenever possible.

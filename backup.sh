@@ -7,6 +7,17 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Load Docker Secrets if _FILE variables are provided
+for secret_var in POSTGRES_USER POSTGRES_PASSWORD S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY S3_ENDPOINT; do
+  file_var="${secret_var}_FILE"
+  if [[ -v "$file_var" ]]; then
+    file_path="${!file_var}"
+    if [ -n "$file_path" ] && [ -f "$file_path" ]; then
+      export "$secret_var"="$(cat "$file_path")"
+    fi
+  fi
+done
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
