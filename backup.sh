@@ -7,6 +7,28 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Load a variable from a _FILE environment variable if it exists
+file_env() {
+  local var="$1"
+  local fileVar="${var}_FILE"
+
+  # Check if the file variable is set
+  if [[ -v "$fileVar" ]]; then
+    local filePath="${!fileVar}"
+    if [ -n "$filePath" ] && [ -f "$filePath" ]; then
+      export "$var"="$(cat "$filePath")"
+    fi
+  fi
+}
+
+file_env "POSTGRES_USER"
+file_env "POSTGRES_PASSWORD"
+file_env "S3_BUCKET"
+file_env "S3_ACCESS_KEY_ID"
+file_env "S3_SECRET_ACCESS_KEY"
+file_env "AWS_ACCESS_KEY_ID"
+file_env "AWS_SECRET_ACCESS_KEY"
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
