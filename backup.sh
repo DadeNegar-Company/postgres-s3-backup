@@ -7,11 +7,54 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# usage: file_env VAR [DEFAULT]
+#    ie: file_env 'XYZ_DB_PASSWORD' 'example'
+# (will allow for "$XYZ_DB_PASSWORD_FILE" to fill in the value of
+#  "$XYZ_DB_PASSWORD" from a file, especially for Docker's secrets feature)
+file_env() {
+  local var="$1"
+  local fileVar="${var}_FILE"
+  local def="${2:-}"
+
+  if [[ -v "$var" ]] && [[ -v "$fileVar" ]]; then
+    echo "Error: Both $var and $fileVar are set (but are exclusive)" >&2
+    exit 1
+  fi
+
+  local val="$def"
+  if [[ -v "$var" ]]; then
+    val="${!var}"
+  elif [[ -v "$fileVar" ]]; then
+    local filePath="${!fileVar}"
+    if [ -f "$filePath" ]; then
+      val="$(cat "$filePath")"
+    else
+      echo "Error: Secret file $filePath does not exist" >&2
+      exit 1
+    fi
+  fi
+
+  export "$var"="$val"
+  unset "$fileVar"
+}
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
-S3_PREFIX=${S3_PREFIX:-""}
-POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
-POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
+
+file_env 'S3_PREFIX' ''
+file_env 'POSTGRES_HOST' 'localhost'
+file_env 'POSTGRES_PORT' '5432'
+file_env 'POSTGRES_USER'
+file_env 'POSTGRES_PASSWORD'
+file_env 'S3_BUCKET'
+file_env 'S3_ACCESS_KEY_ID'
+file_env 'AWS_ACCESS_KEY_ID'
+file_env 'S3_SECRET_ACCESS_KEY'
+file_env 'AWS_SECRET_ACCESS_KEY'
+file_env 'S3_REGION' 'us-east-1'
+file_env 'S3_ENDPOINT'
+file_env 'BACKUP_ALL_DATABASES'
+file_env 'POSTGRES_DB'
 
 if [ -z "$POSTGRES_USER" ]; then
   echo "Error: POSTGRES_USER must be provided."
@@ -33,9 +76,13 @@ echo "Starting backup process at $DATE"
 export PGPASSWORD=$POSTGRES_PASSWORD
 
 # Configure AWS CLI using standard environment variables if custom ones were provided
-export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
-export AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
-export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
+if [ -n "$S3_ACCESS_KEY_ID" ]; then
+  export AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID"
+fi
+if [ -n "$S3_SECRET_ACCESS_KEY" ]; then
+  export AWS_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY"
+fi
+export AWS_DEFAULT_REGION="$S3_REGION"
 
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
