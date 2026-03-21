@@ -14,14 +14,14 @@ export PATH="$MOCK_DIR:$PATH"
 cat << 'EOF' > "$MOCK_DIR/aws"
 #!/bin/bash
 cat > /dev/null
-echo "AWS Mock executed with args: $@"
+echo "AWS Mock executed with args: $*"
 EOF
 chmod +x "$MOCK_DIR/aws"
 
 # Create mock for pg_dump
 cat << 'EOF' > "$MOCK_DIR/pg_dump"
 #!/bin/bash
-echo "pg_dump Mock executed with args: $@" >&2
+echo "pg_dump Mock executed with args: $*" >&2
 echo "Mock database content"
 EOF
 chmod +x "$MOCK_DIR/pg_dump"
