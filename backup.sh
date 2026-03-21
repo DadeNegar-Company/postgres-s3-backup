@@ -37,6 +37,12 @@ export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
 export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 
+# Check for pigz availability for parallel compression
+COMPRESS_CMD="gzip"
+if command -v pigz > /dev/null 2>&1; then
+  COMPRESS_CMD="pigz"
+fi
+
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
   echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
@@ -71,7 +77,7 @@ for db in "${DBS[@]}"; do
 
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | $COMPRESS_CMD | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
