@@ -17,12 +17,15 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 | `POSTGRES_PORT` | Port of the database server | `5432` | No |
 | `POSTGRES_USER` | Username to connect with | | **Yes** |
 | `POSTGRES_PASSWORD` | Password for the database user | | **Yes** |
+| `POSTGRES_PASSWORD_FILE` | Path to file containing the database password (Docker Secrets support) | | No |
 | `POSTGRES_DB` | Comma-separated list of databases to dump | | No |
 | `S3_BUCKET` | S3 bucket name | | **Yes** |
 | `S3_PREFIX` | S3 bucket path (folder) | `""` | No |
 | `S3_ENDPOINT`| Custom S3 endpoint URL | `""` | No |
 | `S3_ACCESS_KEY_ID` | AWS/S3 access key | | **Yes** |
+| `S3_ACCESS_KEY_ID_FILE` | Path to file containing the AWS/S3 access key (Docker Secrets support) | | No |
 | `S3_SECRET_ACCESS_KEY` | AWS/S3 secret key | | **Yes** |
+| `S3_SECRET_ACCESS_KEY_FILE` | Path to file containing the AWS/S3 secret key (Docker Secrets support) | | No |
 | `S3_REGION` | AWS/S3 region | `us-east-1` | No |
 
 ## Usage
@@ -39,6 +42,20 @@ docker run --rm \
   -e S3_ACCESS_KEY_ID=XXX \
   -e S3_SECRET_ACCESS_KEY=YYY \
   -e S3_ENDPOINT=https://s3.example.com \
+  ghcr.io/mahdishariatzade/postgres-s3-backup:18
+```
+
+You can also use Docker Secrets via `_FILE` environment variables:
+
+```bash
+docker run --rm \
+  -e POSTGRES_HOST=db.example.com \
+  -e POSTGRES_USER=admin \
+  -e POSTGRES_PASSWORD_FILE=/run/secrets/db_password \
+  -e POSTGRES_DB=db1 \
+  -e S3_BUCKET=my-backups \
+  -e S3_ACCESS_KEY_ID_FILE=/run/secrets/s3_access_key \
+  -e S3_SECRET_ACCESS_KEY_FILE=/run/secrets/s3_secret_key \
   ghcr.io/mahdishariatzade/postgres-s3-backup:18
 ```
 

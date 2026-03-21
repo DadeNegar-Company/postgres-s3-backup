@@ -7,6 +7,28 @@ set -o pipefail
 # Secure default umask to ensure created files are only readable by the owner
 umask 0077
 
+# Function to load a secret from a file (e.g., Docker Secrets)
+load_secret() {
+  local var_name="$1"
+  local file_var_name="${var_name}_FILE"
+
+  # Ensure the _FILE variable exists and is set
+  if [[ -v "$file_var_name" ]]; then
+    local file_path="${!file_var_name}"
+    if [ -f "$file_path" ]; then
+      # Read the first line of the file and strip any trailing carriage returns or newlines
+      export "$var_name"="$(head -n 1 "$file_path" | tr -d '\r\n')"
+    else
+      echo "Warning: Secret file specified by $file_var_name ($file_path) does not exist."
+    fi
+  fi
+}
+
+# Load secrets from files if provided
+load_secret "POSTGRES_PASSWORD"
+load_secret "S3_ACCESS_KEY_ID"
+load_secret "S3_SECRET_ACCESS_KEY"
+
 # Default variables
 DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
@@ -36,6 +58,16 @@ export PGPASSWORD=$POSTGRES_PASSWORD
 export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
 export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
+
+if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+  echo "Error: AWS_ACCESS_KEY_ID or S3_ACCESS_KEY_ID must be provided."
+  exit 1
+fi
+
+if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+  echo "Error: AWS_SECRET_ACCESS_KEY or S3_SECRET_ACCESS_KEY must be provided."
+  exit 1
+fi
 
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
