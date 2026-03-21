@@ -50,6 +50,24 @@ else
   exit 0
 fi
 
+# Optimization: Pre-calculate static S3 destination and AWS arguments outside the loop
+BASE_S3_DEST="s3://${S3_BUCKET}"
+if [ -n "$S3_PREFIX" ]; then
+  BASE_S3_DEST="${BASE_S3_DEST}/${S3_PREFIX}"
+fi
+
+AWS_ARGS=()
+if [ -n "$S3_ENDPOINT" ]; then
+  AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
+fi
+
+# Optimization: Use pigz for parallel compression if available, fallback to gzip
+if command -v pigz >/dev/null 2>&1; then
+  COMPRESS_CMD="pigz"
+else
+  COMPRESS_CMD="gzip"
+fi
+
 for db in "${DBS[@]}"; do
   # Trim whitespace (use sed to avoid xargs parsing issues with quotes)
   db=$(echo "$db" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
@@ -57,21 +75,13 @@ for db in "${DBS[@]}"; do
       # Sanitize DB name for filename to prevent directory traversal or weird S3 keys
       SAFE_DB_NAME=$(echo "$db" | sed 's/[^a-zA-Z0-9._-]/_/g')
       FILE_NAME="${SAFE_DB_NAME}_${DATE}.sql.gz"
-      S3_DEST="s3://${S3_BUCKET}"
-      if [ -n "$S3_PREFIX" ]; then
-         S3_DEST="${S3_DEST}/${S3_PREFIX}"
-      fi
 
-      AWS_ARGS=()
-      if [ -n "$S3_ENDPOINT" ]; then
-         AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
-      fi
-
-      echo "Streaming backup of database: $db to ${S3_DEST}/$FILE_NAME..."
+      echo "Streaming backup of database: $db to ${BASE_S3_DEST}/$FILE_NAME..."
 
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | gzip | aws s3 cp - "${S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      # Optimization: Use $COMPRESS_CMD (pigz or gzip) to speed up compression
+      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" | aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
