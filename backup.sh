@@ -18,8 +18,12 @@ if [ -z "$POSTGRES_USER" ]; then
   exit 1
 fi
 
+if [[ -v POSTGRES_PASSWORD_FILE && -f "$POSTGRES_PASSWORD_FILE" ]]; then
+  POSTGRES_PASSWORD=$(head -n 1 "$POSTGRES_PASSWORD_FILE" | tr -d '\r\n')
+fi
+
 if [ -z "$POSTGRES_PASSWORD" ]; then
-  echo "Error: POSTGRES_PASSWORD must be provided."
+  echo "Error: POSTGRES_PASSWORD or POSTGRES_PASSWORD_FILE must be provided."
   exit 1
 fi
 
@@ -30,17 +34,25 @@ fi
 
 echo "Starting backup process at $DATE"
 
-export PGPASSWORD=$POSTGRES_PASSWORD
-
 # Configure AWS CLI using standard environment variables if custom ones were provided
-export AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
-export AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
+if [[ -v S3_ACCESS_KEY_ID_FILE && -f "$S3_ACCESS_KEY_ID_FILE" ]]; then
+  AWS_ACCESS_KEY_ID=$(head -n 1 "$S3_ACCESS_KEY_ID_FILE" | tr -d '\r\n')
+else
+  AWS_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-$AWS_ACCESS_KEY_ID}
+fi
+
+if [[ -v S3_SECRET_ACCESS_KEY_FILE && -f "$S3_SECRET_ACCESS_KEY_FILE" ]]; then
+  AWS_SECRET_ACCESS_KEY=$(head -n 1 "$S3_SECRET_ACCESS_KEY_FILE" | tr -d '\r\n')
+else
+  AWS_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-$AWS_SECRET_ACCESS_KEY}
+fi
+
 export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
   echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
-  DBS_LIST=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate = false;")
+  DBS_LIST=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate = false;")
   # Convert the newline separated list into an array
   mapfile -t DBS <<< "$DBS_LIST"
 elif [ -n "$POSTGRES_DB" ]; then
@@ -82,7 +94,7 @@ for db in "${DBS[@]}"; do
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
       # Optimization: Use $COMPRESS_CMD (pigz or gzip) to speed up compression
-      pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" | aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" | AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
