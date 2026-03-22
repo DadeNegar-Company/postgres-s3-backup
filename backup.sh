@@ -69,11 +69,12 @@ else
 fi
 
 for db in "${DBS[@]}"; do
-  # Trim whitespace (use sed to avoid xargs parsing issues with quotes)
-  db=$(echo "$db" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+  # Trim whitespace (use bash built-ins instead of subshell/sed for performance)
+  db="${db#"${db%%[![:space:]]*}"}"
+  db="${db%"${db##*[![:space:]]}"}"
   if [ -n "$db" ]; then
       # Sanitize DB name for filename to prevent directory traversal or weird S3 keys
-      SAFE_DB_NAME=$(echo "$db" | sed 's/[^a-zA-Z0-9._-]/_/g')
+      SAFE_DB_NAME="${db//[^a-zA-Z0-9._-]/_}"
       FILE_NAME="${SAFE_DB_NAME}_${DATE}.sql.gz"
 
       echo "Streaming backup of database: $db to ${BASE_S3_DEST}/$FILE_NAME..."
