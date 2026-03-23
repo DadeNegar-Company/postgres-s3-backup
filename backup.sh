@@ -79,6 +79,7 @@ if command -v pigz >/dev/null 2>&1; then
 else
   COMPRESS_CMD="gzip"
 fi
+COMPRESS_ARGS="--fast"
 
 for db in "${DBS[@]}"; do
   # Trim whitespace (use bash built-ins instead of subshell/sed for performance)
@@ -94,7 +95,7 @@ for db in "${DBS[@]}"; do
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
       # Optimization: Use $COMPRESS_CMD (pigz or gzip) to speed up compression
-      PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" | AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" $COMPRESS_ARGS | AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
