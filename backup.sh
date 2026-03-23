@@ -49,6 +49,10 @@ fi
 
 export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 
+# Security: Unexport secrets so they don't leak into child processes (like pigz) that don't need them.
+# The secrets are still available as local variables and will be explicitly passed to pg_dump and aws.
+export -n POSTGRES_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY POSTGRES_PASSWORD_FILE S3_ACCESS_KEY_ID_FILE S3_SECRET_ACCESS_KEY_FILE S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
+
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
   echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
