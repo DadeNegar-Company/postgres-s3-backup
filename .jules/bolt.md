@@ -9,3 +9,7 @@
 ## 2024-10-26 - [Optimize Bash String Manipulation in Loops]
 **Learning:** Using `$(echo "$var" | sed '...')` inside loops creates a significant performance bottleneck because Bash forks a subshell and invokes external binaries (`echo`, `sed`) for each iteration. In a benchmark of 1000 iterations, the external subshells took ~7 seconds compared to ~0.05 seconds for Bash built-ins.
 **Action:** Replace `echo` + `sed` pattern inside loops with pure Bash parameter expansion. Use `${var#"${var%%[![:space:]]*}"}` and `${var%"${var##*[![:space:]]}"}` for string trimming, and `${var//pattern/replacement}` for character replacement to keep execution in the main process and achieve ~140x speedups.
+
+## 2024-10-27 - [Optimize Compression Speed for Database Backups]
+**Learning:** For database backups, compressing archives often uses excessive CPU cycles, creating a bottleneck. The difference in space savings between default compression and fast compression (`--fast` or `-1`) is generally negligible (e.g., ~1% difference in size for typical datasets) while providing significantly faster backup durations (e.g., ~2-3x speedup on compression speed). Time and CPU utilization are typically more critical than minor space savings on fast networks.
+**Action:** When invoking compression binaries like `gzip` or `pigz` in a streaming pipeline, default to prioritizing speed over ratio by using arguments like `--fast` unless strict space requirements dictate otherwise.
