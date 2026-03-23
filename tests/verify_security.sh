@@ -1,83 +1,89 @@
 #!/bin/bash
-
-# Exit on explicitly thrown errors
 set -e
 
-# Mock directory and secret files
-MOCK_DIR="$(pwd)/tests/mock_sec_dir"
-mkdir -p "$MOCK_DIR"
+# setup
+export PATH="$(pwd)/tests/mock_bin_sec:$PATH"
+mkdir -p tests/mock_bin_sec
 
-echo "secret_db_pass" > "$MOCK_DIR/db_pass.txt"
-echo "secret_aws_key" > "$MOCK_DIR/aws_key.txt"
-echo "secret_aws_secret" > "$MOCK_DIR/aws_secret.txt"
+# cleanup on term
+trap 'rm -rf tests/mock_bin_sec /tmp/verify_mock_*' 0
 
-# Cleanup trap
-trap 'rm -rf "$MOCK_DIR" env_check.log' EXIT
+cat << 'MOCK' > tests/mock_bin_sec/psql
+#!/bin/bash
+echo "db1"
+MOCK
+chmod +x tests/mock_bin_sec/psql
 
-export PATH="$MOCK_DIR:$PATH"
+cat << 'MOCK' > tests/mock_bin_sec/pg_dump
+#!/bin/bash
+echo "dumping db"
+env > /tmp/verify_mock_pg_dump_env
+MOCK
+chmod +x tests/mock_bin_sec/pg_dump
 
-# Create mock for aws
-cat << 'EOF' > "$MOCK_DIR/aws"
+cat << 'MOCK' > tests/mock_bin_sec/pigz
+#!/bin/bash
+cat
+env > /tmp/verify_mock_pigz_env
+MOCK
+chmod +x tests/mock_bin_sec/pigz
+
+cat << 'MOCK' > tests/mock_bin_sec/aws
 #!/bin/bash
 cat > /dev/null
-echo "AWS Mock executed with env:"
-env | grep AWS_
-EOF
-chmod +x "$MOCK_DIR/aws"
+env > /tmp/verify_mock_aws_env
+MOCK
+chmod +x tests/mock_bin_sec/aws
 
-# Create mock for pg_dump
-cat << 'EOF' > "$MOCK_DIR/pg_dump"
-#!/bin/bash
-echo "pg_dump Mock executed" >&2
-echo "Mock database content"
-EOF
-chmod +x "$MOCK_DIR/pg_dump"
+# Mock secret files
+echo "secretpass" > /tmp/verify_mock_pgpass.txt
+echo "secretawskey" > /tmp/verify_mock_awskey.txt
+echo "secretawssecret" > /tmp/verify_mock_awssecret.txt
 
-# Create mock for pigz
-cat << 'EOF' > "$MOCK_DIR/pigz"
-#!/bin/bash
-# We write env to a log to check if secrets leaked
-env > "$(pwd)/env_check.log"
-cat
-EOF
-chmod +x "$MOCK_DIR/pigz"
-
-# Create mock for psql
-cat << 'EOF' > "$MOCK_DIR/psql"
-#!/bin/bash
-echo "mock_db1"
-EOF
-chmod +x "$MOCK_DIR/psql"
-
-echo "Running backup.sh to verify Docker Secrets and variable scoping..."
-
-export POSTGRES_USER="testuser"
-export S3_BUCKET="testbucket"
+export POSTGRES_PASSWORD_FILE="/tmp/verify_mock_pgpass.txt"
+export S3_ACCESS_KEY_ID_FILE="/tmp/verify_mock_awskey.txt"
+export S3_SECRET_ACCESS_KEY_FILE="/tmp/verify_mock_awssecret.txt"
+export POSTGRES_PASSWORD="secretpassold"
+export AWS_ACCESS_KEY_ID="secretawskeyold"
+export AWS_SECRET_ACCESS_KEY="secretawssecretold"
+export S3_ACCESS_KEY_ID="s3awskey"
+export S3_SECRET_ACCESS_KEY="s3awssecret"
+export POSTGRES_USER="user"
+export S3_BUCKET="bucket"
 export BACKUP_ALL_DATABASES="true"
 
-# Setup file inputs
-export POSTGRES_PASSWORD_FILE="$MOCK_DIR/db_pass.txt"
-export S3_ACCESS_KEY_ID_FILE="$MOCK_DIR/aws_key.txt"
-export S3_SECRET_ACCESS_KEY_FILE="$MOCK_DIR/aws_secret.txt"
+# Execute
+./backup.sh > /dev/null 2>&1
 
-rm -f env_check.log
-OUTPUT=$(./backup.sh 2>&1)
-
-# Check if pigz (which doesn't need secrets) has them in its env
-if grep -q "secret_db_pass" env_check.log || grep -q "secret_aws_key" env_check.log || grep -q "secret_aws_secret" env_check.log; then
-  echo "FAILED: Secrets leaked into pigz's environment!"
-  cat env_check.log
-  exit 1
-else
-  echo "SUCCESS: Secrets did not leak into unrelated commands."
+# Assertions
+echo "Verifying pigz does not receive secrets..."
+if grep -qE "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY=" /tmp/verify_mock_pigz_env; then
+  echo "FAIL: Secrets leaked to pigz!"
+  cat /tmp/verify_mock_pigz_env | grep -E "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY="
+  kill -s TERM $$
 fi
+echo "SUCCESS: pigz did not receive secrets."
 
-# Ensure backup finished (which means it successfully read the files, otherwise it would exit early)
-if echo "$OUTPUT" | grep -q "Backup process completed successfully."; then
-  echo "SUCCESS: backup.sh executed successfully."
-else
-  echo "FAILED: backup.sh did not complete."
-  echo "Output was:"
-  echo "$OUTPUT"
-  exit 1
+echo "Verifying pg_dump does not receive AWS secrets..."
+if grep -qE "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=" /tmp/verify_mock_pg_dump_env; then
+  echo "FAIL: AWS secrets leaked to pg_dump!"
+  cat /tmp/verify_mock_pg_dump_env | grep -E "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY="
+  kill -s TERM $$
 fi
+echo "SUCCESS: pg_dump did not receive AWS secrets."
+
+echo "Verifying pg_dump does receive PGPASSWORD..."
+if ! grep -q "PGPASSWORD=" /tmp/verify_mock_pg_dump_env; then
+  echo "FAIL: PGPASSWORD was not explicitly passed to pg_dump!"
+  kill -s TERM $$
+fi
+echo "SUCCESS: pg_dump received PGPASSWORD explicitly."
+
+echo "Verifying aws does receive AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY..."
+if ! grep -q "AWS_ACCESS_KEY_ID=" /tmp/verify_mock_aws_env || ! grep -q "AWS_SECRET_ACCESS_KEY=" /tmp/verify_mock_aws_env; then
+  echo "FAIL: AWS secrets were not explicitly passed to aws command!"
+  kill -s TERM $$
+fi
+echo "SUCCESS: aws received AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY explicitly."
+
+echo "All security tests passed."
