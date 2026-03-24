@@ -51,7 +51,7 @@ export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 
 # Security: Unexport secrets so they don't leak into child processes (like pigz) that don't need them.
 # The secrets are still available as local variables and will be explicitly passed to pg_dump and aws.
-export -n POSTGRES_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY POSTGRES_PASSWORD_FILE S3_ACCESS_KEY_ID_FILE S3_SECRET_ACCESS_KEY_FILE S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
+export -n POSTGRES_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN POSTGRES_PASSWORD_FILE S3_ACCESS_KEY_ID_FILE S3_SECRET_ACCESS_KEY_FILE S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
 
 # If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
 if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
@@ -99,7 +99,7 @@ for db in "${DBS[@]}"; do
       # Stream backup directly to S3 without local buffering
       # set -o pipefail ensures we catch pg_dump errors
       # Optimization: Use $COMPRESS_CMD (pigz or gzip) to speed up compression
-      PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" $COMPRESS_ARGS | AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+      PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -- "$db" | "$COMPRESS_CMD" $COMPRESS_ARGS | env ${AWS_SESSION_TOKEN:+AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN} AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
       echo "Finished backing up $db."
     fi
   done
