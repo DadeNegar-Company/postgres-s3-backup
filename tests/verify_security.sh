@@ -48,6 +48,7 @@ export AWS_ACCESS_KEY_ID="secretawskeyold"
 export AWS_SECRET_ACCESS_KEY="secretawssecretold"
 export S3_ACCESS_KEY_ID="s3awskey"
 export S3_SECRET_ACCESS_KEY="s3awssecret"
+export AWS_SESSION_TOKEN="my_sts_token"
 export POSTGRES_USER="user"
 export S3_BUCKET="bucket"
 export BACKUP_ALL_DATABASES="true"
@@ -57,17 +58,17 @@ export BACKUP_ALL_DATABASES="true"
 
 # Assertions
 echo "Verifying pigz does not receive secrets..."
-if grep -qE "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY=" /tmp/verify_mock_pigz_env; then
+if grep -qE "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|AWS_SESSION_TOKEN=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY=" /tmp/verify_mock_pigz_env; then
   echo "FAIL: Secrets leaked to pigz!"
-  cat /tmp/verify_mock_pigz_env | grep -E "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY="
+  cat /tmp/verify_mock_pigz_env | grep -E "POSTGRES_PASSWORD=|AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|AWS_SESSION_TOKEN=|POSTGRES_PASSWORD_FILE=|S3_ACCESS_KEY_ID_FILE=|S3_SECRET_ACCESS_KEY_FILE=|S3_ACCESS_KEY_ID=|S3_SECRET_ACCESS_KEY="
   kill -s TERM $$
 fi
 echo "SUCCESS: pigz did not receive secrets."
 
 echo "Verifying pg_dump does not receive AWS secrets..."
-if grep -qE "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=" /tmp/verify_mock_pg_dump_env; then
+if grep -qE "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|AWS_SESSION_TOKEN=" /tmp/verify_mock_pg_dump_env; then
   echo "FAIL: AWS secrets leaked to pg_dump!"
-  cat /tmp/verify_mock_pg_dump_env | grep -E "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY="
+  cat /tmp/verify_mock_pg_dump_env | grep -E "AWS_ACCESS_KEY_ID=|AWS_SECRET_ACCESS_KEY=|AWS_SESSION_TOKEN="
   kill -s TERM $$
 fi
 echo "SUCCESS: pg_dump did not receive AWS secrets."
@@ -79,8 +80,8 @@ if ! grep -q "PGPASSWORD=" /tmp/verify_mock_pg_dump_env; then
 fi
 echo "SUCCESS: pg_dump received PGPASSWORD explicitly."
 
-echo "Verifying aws does receive AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY..."
-if ! grep -q "AWS_ACCESS_KEY_ID=" /tmp/verify_mock_aws_env || ! grep -q "AWS_SECRET_ACCESS_KEY=" /tmp/verify_mock_aws_env; then
+echo "Verifying aws does receive AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN..."
+if ! grep -q "AWS_ACCESS_KEY_ID=" /tmp/verify_mock_aws_env || ! grep -q "AWS_SECRET_ACCESS_KEY=" /tmp/verify_mock_aws_env || ! grep -q "AWS_SESSION_TOKEN=" /tmp/verify_mock_aws_env; then
   echo "FAIL: AWS secrets were not explicitly passed to aws command!"
   kill -s TERM $$
 fi
