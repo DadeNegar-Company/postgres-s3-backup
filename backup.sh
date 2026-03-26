@@ -85,6 +85,18 @@ else
 fi
 COMPRESS_ARGS="--fast"
 
+# Optimization: Tune AWS CLI S3 concurrency and chunk size for faster multipart uploads
+TEMP_AWS_CONFIG="$(mktemp)"
+if [[ -v AWS_CONFIG_FILE && -f "$AWS_CONFIG_FILE" ]]; then
+  cp "$AWS_CONFIG_FILE" "$TEMP_AWS_CONFIG"
+elif [ -f ~/.aws/config ]; then
+  cp ~/.aws/config "$TEMP_AWS_CONFIG"
+fi
+export AWS_CONFIG_FILE="$TEMP_AWS_CONFIG"
+trap 'rm -f "$TEMP_AWS_CONFIG"; '"$(trap -p EXIT | sed -n "s/^trap -- '\(.*\)' EXIT$/\1/p")" EXIT
+aws configure set default.s3.max_concurrent_requests 20
+aws configure set default.s3.multipart_chunksize 50MB
+
 for db in "${DBS[@]}"; do
   # Trim whitespace (use bash built-ins instead of subshell/sed for performance)
   db="${db#"${db%%[![:space:]]*}"}"
