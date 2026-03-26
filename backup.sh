@@ -77,6 +77,10 @@ if [ -n "$S3_ENDPOINT" ]; then
   AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
 fi
 
+# Optimization: Tune AWS CLI S3 upload settings to increase throughput for streaming large backups
+aws configure set default.s3.max_concurrent_requests 20 < /dev/null || true
+aws configure set default.s3.multipart_chunksize 64MB < /dev/null || true
+
 # Optimization: Use pigz for parallel compression if available, fallback to gzip
 if command -v pigz >/dev/null 2>&1; then
   COMPRESS_CMD="pigz"

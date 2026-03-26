@@ -1,0 +1,2 @@
+export AWS_MAX_CONCURRENT_REQUESTS=20
+aws configure get default.s3.max_concurrent_requests
