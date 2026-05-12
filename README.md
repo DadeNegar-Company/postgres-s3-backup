@@ -1,8 +1,9 @@
-# Postgres S3 Backup (Multi-Database Support)
+# Postgres S3 Backup (Full Cluster and Multi-Database Support)
 
-A custom Docker image to back up one or more PostgreSQL databases to an S3-compatible storage service. It uses `pg_dump` from official PostgreSQL Alpine images and uploads the compressed archives (`.sql.gz`) via the AWS CLI.
+A custom Docker image to back up a full PostgreSQL cluster or one or more PostgreSQL databases to an S3-compatible storage service. It uses `pg_dumpall` / `pg_dump` from official PostgreSQL Alpine images and uploads the compressed archives (`.sql.gz`) via the AWS CLI.
 
 ## Features
+- Creates a full PostgreSQL cluster backup with `pg_dumpall` if `BACKUP_FULL_CLUSTER=true` is set.
 - Automatically backs up **all** databases if `BACKUP_ALL_DATABASES=true` is set.
 - Backs up *multiple* databases if provided as a comma-separated list in `POSTGRES_DB`.
 - Supports any S3-compatible service (AWS S3, MinIO, Cloudflare R2, ArvanCloud, etc.)
@@ -12,6 +13,7 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
+| `BACKUP_FULL_CLUSTER` | If `true` or `1`, runs one full `pg_dumpall` backup including globals, roles, tablespaces, and all databases. | `false` | No |
 | `BACKUP_ALL_DATABASES` | If `true` or `1`, dynamically fetches all available DBs and backs them up. | `false` | No |
 | `POSTGRES_HOST` | Hostname of the database server | `localhost` | No |
 | `POSTGRES_PORT` | Port of the database server | `5432` | No |
@@ -28,6 +30,27 @@ A custom Docker image to back up one or more PostgreSQL databases to an S3-compa
 ## Usage
 
 You can run this container standalone or via a Kubernetes `CronJob`. To deploy it, simply pass the required environments:
+
+### Full cluster backup
+
+Use this when you want a single restoreable SQL archive for the whole PostgreSQL instance, including global objects:
+
+```bash
+docker run --rm \
+  -e BACKUP_FULL_CLUSTER=true \
+  -e POSTGRES_HOST=db.example.com \
+  -e POSTGRES_USER=admin \
+  -e POSTGRES_PASSWORD=secret \
+  -e S3_BUCKET=my-backups \
+  -e S3_ACCESS_KEY_ID=XXX \
+  -e S3_SECRET_ACCESS_KEY=YYY \
+  -e S3_ENDPOINT=https://s3.example.com \
+  ghcr.io/mahdishariatzade/postgres-s3-backup:18
+```
+
+This generates a file named `postgres_full_cluster_YYYY-MM-DDTHH:MM:SSZ.sql.gz` stored in your bucket at `s3://BUCKET/PREFIX/`.
+
+### Per-database backups
 
 ```bash
 docker run --rm \
