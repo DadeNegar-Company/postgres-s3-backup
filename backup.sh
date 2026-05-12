@@ -12,8 +12,10 @@ DATE=$(date +"%Y-%m-%dT%H:%M:%SZ")
 S3_PREFIX=${S3_PREFIX:-""}
 POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
 POSTGRES_PORT=${POSTGRES_PORT:-"5432"}
+BACKUP_ALL_DATABASES=${BACKUP_ALL_DATABASES:-"false"}
+BACKUP_FULL_CLUSTER=${BACKUP_FULL_CLUSTER:-"false"}
 
-if [ -z "$POSTGRES_USER" ]; then
+if [ -z "${POSTGRES_USER:-}" ]; then
   echo "Error: POSTGRES_USER must be provided."
   exit 1
 fi
@@ -22,12 +24,12 @@ if [[ -v POSTGRES_PASSWORD_FILE && -f "$POSTGRES_PASSWORD_FILE" ]]; then
   POSTGRES_PASSWORD=$(head -n 1 "$POSTGRES_PASSWORD_FILE" | tr -d '\r\n')
 fi
 
-if [ -z "$POSTGRES_PASSWORD" ]; then
+if [ -z "${POSTGRES_PASSWORD:-}" ]; then
   echo "Error: POSTGRES_PASSWORD or POSTGRES_PASSWORD_FILE must be provided."
   exit 1
 fi
 
-if [ -z "$S3_BUCKET" ]; then
+if [ -z "${S3_BUCKET:-}" ]; then
   echo "Error: S3_BUCKET must be provided."
   exit 1
 fi
@@ -53,33 +55,15 @@ export AWS_DEFAULT_REGION=${S3_REGION:-us-east-1}
 # The secrets are still available as local variables and will be explicitly passed to pg_dump and aws.
 export -n POSTGRES_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN POSTGRES_PASSWORD_FILE S3_ACCESS_KEY_ID_FILE S3_SECRET_ACCESS_KEY_FILE S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
 
-# If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
-if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
-  echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
-  DBS_LIST=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate = false;")
-  # Convert the newline separated list into an array
-  mapfile -t DBS <<< "$DBS_LIST"
-elif [ -n "$POSTGRES_DB" ]; then
-  IFS=',' read -ra DBS <<< "$POSTGRES_DB"
-else
-  echo "Neither POSTGRES_DB nor BACKUP_ALL_DATABASES is provided. Nothing to backup."
-  exit 0
-fi
-
-# Optimization: Pre-calculate static S3 destination and AWS arguments outside the loop
 BASE_S3_DEST="s3://${S3_BUCKET}"
 if [ -n "$S3_PREFIX" ]; then
   BASE_S3_DEST="${BASE_S3_DEST}/${S3_PREFIX}"
 fi
 
 AWS_ARGS=()
-if [ -n "$S3_ENDPOINT" ]; then
+if [ -n "${S3_ENDPOINT:-}" ]; then
   AWS_ARGS+=("--endpoint-url" "$S3_ENDPOINT")
 fi
-
-# Optimization: Tune AWS CLI S3 upload settings to increase throughput for streaming large backups
-aws configure set default.s3.max_concurrent_requests 20 < /dev/null || true
-aws configure set default.s3.multipart_chunksize 64MB < /dev/null || true
 
 # Optimization: Use pigz for parallel compression if available, fallback to gzip
 if command -v pigz >/dev/null 2>&1; then
@@ -100,6 +84,36 @@ export AWS_CONFIG_FILE="$TEMP_AWS_CONFIG"
 trap 'rm -f "$TEMP_AWS_CONFIG"; '"$(trap -p EXIT | sed -n "s/^trap -- '\(.*\)' EXIT$/\1/p")" EXIT
 aws configure set default.s3.max_concurrent_requests 20
 aws configure set default.s3.multipart_chunksize 50MB
+
+if [ "$BACKUP_FULL_CLUSTER" = "true" ] || [ "$BACKUP_FULL_CLUSTER" = "1" ]; then
+  FILE_NAME="postgres_full_cluster_${DATE}.sql.gz"
+
+  echo "Streaming full PostgreSQL cluster backup to ${BASE_S3_DEST}/$FILE_NAME..."
+  PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall \
+    -h "$POSTGRES_HOST" \
+    -p "$POSTGRES_PORT" \
+    -U "$POSTGRES_USER" \
+    --clean \
+    --if-exists \
+    | "$COMPRESS_CMD" $COMPRESS_ARGS \
+    | env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" ${AWS_SESSION_TOKEN:+"AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN"} aws s3 cp - "${BASE_S3_DEST}/$FILE_NAME" "${AWS_ARGS[@]}"
+
+  echo "Full cluster backup completed successfully."
+  exit 0
+fi
+
+# If BACKUP_ALL_DATABASES is set to true, fetch all databases dynamically
+if [ "$BACKUP_ALL_DATABASES" = "true" ] || [ "$BACKUP_ALL_DATABASES" = "1" ]; then
+  echo "BACKUP_ALL_DATABASES is set. Fetching all databases from the server..."
+  DBS_LIST=$(PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d postgres -t -c "SELECT datname FROM pg_database WHERE datistemplate = false;")
+  # Convert the newline separated list into an array
+  mapfile -t DBS <<< "$DBS_LIST"
+elif [ -n "${POSTGRES_DB:-}" ]; then
+  IFS=',' read -ra DBS <<< "$POSTGRES_DB"
+else
+  echo "Neither POSTGRES_DB nor BACKUP_ALL_DATABASES is provided. Nothing to backup."
+  exit 0
+fi
 
 for db in "${DBS[@]}"; do
   # Trim whitespace (use bash built-ins instead of subshell/sed for performance)
